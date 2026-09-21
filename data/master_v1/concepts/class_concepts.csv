@@ -1,0 +1,44 @@
+class_id,class_name,shape,colour_profile,border_type,symbol_category,symbol_content,vienna_reference,stvo_reference,annotator,annotation_confidence,notes
+0,Speed limit (20km/h),circle,white_red,red_border,speed_numeral,20,C 14,Zeichen 274-20,Pratham,high,Vienna Annex 1 Section C
+1,Speed limit (30km/h),circle,white_red,red_border,speed_numeral,30,C 14,Zeichen 274-30,Pratham,high,Vienna Annex 1 Section C
+2,Speed limit (50km/h),circle,white_red,red_border,speed_numeral,50,C 14,Zeichen 274-50,Pratham,high,Vienna Annex 1 Section C
+3,Speed limit (60km/h),circle,white_red,red_border,speed_numeral,60,C 14,Zeichen 274-60,Pratham,high,Vienna Annex 1 Section C
+4,Speed limit (70km/h),circle,white_red,red_border,speed_numeral,70,C 14,Zeichen 274-70,Pratham,high,Vienna Annex 1 Section C
+5,Speed limit (80km/h),circle,white_red,red_border,speed_numeral,80,C 14,Zeichen 274-80,Pratham,high,Vienna Annex 1 Section C
+6,End of speed limit (80km/h),circle,white_black,black_border,deregulation_cancel,end_speed_80,C 17b,Zeichen 278-80,Pratham,high,Diagonal stroke cancellation
+7,Speed limit (100km/h),circle,white_red,red_border,speed_numeral,100,C 14,Zeichen 274-100,Pratham,high,Vienna Annex 1 Section C
+8,Speed limit (120km/h),circle,white_red,red_border,speed_numeral,120,C 14,Zeichen 274-120,Pratham,high,Vienna Annex 1 Section C
+9,No passing,circle,white_red,red_border,prohibition_restriction,no_passing_cars,C 13a,Zeichen 276,Pratham,high,Red car left black car right
+10,No passing for vehicles over 3.5t,circle,white_red,red_border,prohibition_restriction,no_passing_trucks,C 13b,Zeichen 277,Pratham,high,Red truck left black car right
+11,Right-of-way at intersection,triangle_up,white_red,red_border,priority_geometry,crossroad_priority,B 5,Zeichen 301,Pratham,high,Priority at next intersection only
+12,Priority road,diamond,yellow_white,white_border,priority_geometry,priority_diamond,B 3,Zeichen 306,Pratham,high,Yellow square tilted 45 deg
+13,Yield,triangle_down,white_red,red_border,priority_geometry,yield_triangle,B 1,Zeichen 205,Pratham,high,Inverted equilateral triangle
+14,Stop,octagon,red_white,white_border,priority_geometry,stop_text,B 2a,Zeichen 206,Pratham,high,Regular octagonal plate with STOP text
+15,No vehicles,circle,white_red,red_border,none,empty_field,C 1,Zeichen 250,Pratham,high,Empty white circle with red border
+16,Vehicles over 3.5t prohibited,circle,white_red,red_border,prohibition_restriction,truck_restriction,C 3e,Zeichen 253,Pratham,high,Black truck symbol on white field
+17,No entry,circle,red_white,white_border,prohibition_restriction,no_entry_bar,C 1a,Zeichen 267,Pratham,high,Solid red circle with white horizontal bar
+18,General caution,triangle_up,white_red,red_border,warning_hazard,general_caution,A 32,Zeichen 101,Pratham,high,Black exclamation mark
+19,Dangerous curve to the left,triangle_up,white_red,red_border,warning_hazard,curve_left,A 1a,Zeichen 103-10,Pratham,high,Curve bending left
+20,Dangerous curve to the right,triangle_up,white_red,red_border,warning_hazard,curve_right,A 1b,Zeichen 103-20,Pratham,high,Curve bending right
+21,Double curve,triangle_up,white_red,red_border,warning_hazard,double_curve,A 1c,Zeichen 105-10,Pratham,high,First curve to left
+22,Bumpy road,triangle_up,white_red,red_border,warning_hazard,bumpy_road,A 2,Zeichen 112,Pratham,high,Uneven road profile
+23,Slippery road,triangle_up,white_red,red_border,warning_hazard,slippery_road,A 4,Zeichen 114,Pratham,high,Car with skid tracks
+24,Road narrows on the right,triangle_up,white_red,red_border,warning_hazard,road_narrows_right,A 3b,Zeichen 121-10,Pratham,high,Right-side convergence
+25,Road work,triangle_up,white_red,red_border,warning_hazard,road_work,A 16,Zeichen 123,Pratham,high,Worker with shovel
+26,Traffic signals,triangle_up,white_red,red_border,warning_hazard,traffic_light,A 17,Zeichen 131,Pratham,high,Vertical signal head
+27,Pedestrians,triangle_up,white_red,red_border,warning_hazard,pedestrians,A 11,Zeichen 133,Pratham,high,Person walking
+28,Children crossing,triangle_up,white_red,red_border,warning_hazard,children,A 12,Zeichen 136,Pratham,high,Two children running
+29,Bicycles crossing,triangle_up,white_red,red_border,warning_hazard,bicycles,A 13,Zeichen 138,Pratham,high,Bicycle pictogram
+30,Beware of ice/snow,triangle_up,white_red,red_border,warning_hazard,ice_snow,A 28,Zeichen 101-51,Pratham,high,Snowflake symbol (formerly Z 113)
+31,Wild animals crossing,triangle_up,white_red,red_border,warning_hazard,wild_animals,A 14,Zeichen 142,Pratham,high,Jumping deer
+32,End speed and passing limits,circle,white_black,black_border,deregulation_cancel,end_all_restrictions,C 17a,Zeichen 282,Pratham,high,Five diagonal black strokes
+33,Turn right ahead,circle,blue_white,white_border,mandatory_direction,turn_right,D 1a-r,Zeichen 209-20,Pratham,high,White arrow pointing right
+34,Turn left ahead,circle,blue_white,white_border,mandatory_direction,turn_left,D 1a-l,Zeichen 209-10,Pratham,high,White arrow pointing left
+35,Ahead only,circle,blue_white,white_border,mandatory_direction,ahead_only,D 1a-s,Zeichen 209-30,Pratham,high,White vertical arrow
+36,Go straight or right,circle,blue_white,white_border,mandatory_direction,straight_or_right,D 1b-sr,Zeichen 214-20,Pratham,high,Bifurcated arrow straight and right
+37,Go straight or left,circle,blue_white,white_border,mandatory_direction,straight_or_left,D 1b-sl,Zeichen 214-10,Pratham,high,Bifurcated arrow straight and left
+38,Keep right,circle,blue_white,white_border,mandatory_direction,keep_right,D 2,Zeichen 222-20,Pratham,high,Diagonal arrow pointing down-right
+39,Keep left,circle,blue_white,white_border,mandatory_direction,keep_left,D 2,Zeichen 222-10,Pratham,high,Diagonal arrow pointing down-left
+40,Roundabout mandatory,circle,blue_white,white_border,mandatory_direction,roundabout,D 3,Zeichen 215,Pratham,high,Three circular arrows counter-clockwise
+41,End of no passing,circle,white_black,black_border,deregulation_cancel,end_no_passing_cars,C 17c,Zeichen 280,Pratham,high,Gray car profile cancelled
+42,End of no passing by vehicles over 3.5t,circle,white_black,black_border,deregulation_cancel,end_no_passing_trucks,C 17c,Zeichen 281,Pratham,high,Gray truck profile cancelled

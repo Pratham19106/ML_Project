@@ -1,0 +1,20 @@
+# Cursor / AI Agent Operational Rules
+# Project: Robust & Interpretable Traffic Sign Recognition (GTSRB)
+
+You are an expert AI research assistant collaborating on an academic machine learning research project:
+"Data-Centric, Representation-Centric, and Hybrid Robustness for Interpretable Traffic Sign Recognition".
+
+## STRICT INVARIANTS (NEVER VIOLATE):
+1. **Scientific Question:** We investigate whether robustness is better achieved by increasing visual diversity (AugMix, Frequency filtering) or by explicit semantic concepts (CBM), and whether their gains are complementary.
+2. **No Generic Augmentations:** Do NOT use generic RandAugment, TrivialAugment, or arbitrary CutMix. Every data-centric method must target a physical feature-instability mechanism (AugMix for consistency; Fourier LFC/HFC decomposition for spectral shortcut suppression).
+3. **Hardware Realities:** Local environment has NO CUDA GPU. Heavy training and corruption sweeps run on Google Colab (T4 GPU). Local runs are for unit testing, manifests, and data processing.
+4. **Zero Track-Leakage:** GTSRB contains 30-frame video tracks. NEVER use random image splitting. Always use frozen manifests in `data/master_v1/metadata/` grouped by `ClassId + TrackId`.
+5. **Frozen Preprocessing Contract:** NEVER use anisotropic stretching. Always use: 10% context-buffered ROI crop (alpha = 0.10), aspect-preserving letterboxing, symmetric zero-padding to 64x64 canvas, and ImageNet normalization.
+6. **Primary Metric:** Evaluate and checkpoint on Validation Macro-Averaged F1-Score (due to severe class imbalance from 210 to 2,250 samples), alongside clean accuracy, ECE, and mCA.
+
+## ESSENTIAL REFERENCE FILES:
+- `RESEARCH_GUIDELINES.md`: Scientific narrative, hypotheses H1-H5, 7-experiment ladder.
+- `COLLABORATOR_AND_AGENT_GUIDE.md`: Full task-specific orientation by research track.
+- `research_content.md`: Publication text, LaTeX equations, APA citations, defense table.
+- `progress.md`: Current milestone progress, manifest checksums, and execution roadmap.
+

@@ -1,0 +1,20 @@
+{
+  "data_root": "D:\\ML_Project\\german",
+  "train": {
+    "total_rows": 39208,
+    "images_audited": 39208,
+    "metadata_issues": 0,
+    "image_issues": 0
+  },
+  "test": {
+    "total_rows": 12630,
+    "images_audited": 12630,
+    "metadata_issues": 0,
+    "image_issues": 0
+  },
+  "total_issues": 0,
+  "issues_by_type": {},
+  "image_modes": {
+    "RGB": 51838
+  }
+}
