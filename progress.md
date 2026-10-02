@@ -191,10 +191,15 @@ Refer to [`RESEARCH_GUIDELINES.md`](file:///d:/ML_Project/RESEARCH_GUIDELINES.md
 3. Download baseline results (`best_baseline_resnet18.pt`, `training_history.json`, `robustness_matrix.csv`, `evaluation_summary.json`) into `reports/baseline_resnet18/`.
 4. Establishes the anchor benchmark: Clean Acc, Macro-F1, ECE, $mCA_{\text{base}}$, and $RPD_{\text{base}}$.
 
-### Step 2: Implement Experiment 2 (AugMix CNN)
-- Build `src/augmentations/augmix.py` implementing stochastic branch mixing and Jensen-Shannon Divergence (JSD) consistency loss.
-- Train ResNet-18 under AugMix using the identical optimizer and seed ($X \to \text{AugMix} \to \text{ResNet-18} \to Y$).
-- Benchmark on the 15-corruption test suite; isolate pure data-centric gain: $\Delta mCA_{\text{AugMix}} = mCA_{\text{AugMix}} - mCA_{\text{base}}$.
+### Step 2: Experiment 2 (AugMix ResNet-18) [CODE IMPLEMENTED & VERIFIED]
+- **Implemented Modules:**
+  - `src/augmentations/augmix.py`: 9 bounded PIL operations ($\le \pm 10^\circ$ rot, $\le \pm 8^\circ$ shear, $\le \pm 4$ px trans), stochastic depth $d \in [1, 3]$, Dirichlet mixing $\mathbf{w} \sim \text{Dirichlet}(1, 1, 1)$, Beta blending $m \sim \text{Beta}(1, 1)$.
+  - Triplet forward pass: Yields $(x_{\text{clean}}, x_{\text{aug1}}, x_{\text{aug2}})$.
+  - `jensen_shannon_loss`: Symmetrized KL divergence computed in float32 with $\lambda_{\text{JSD}} = 12.0$.
+  - `train_augmix.py`: Production training loop with concatenated GPU forward pass (`[3*B, 3, 64, 64]`), linear warmup, cosine annealing, and clean Validation Macro-F1 checkpointing.
+  - `augmix_experiment_colab.ipynb`: Colab notebook with visual inspection, training, and 75-point benchmark sweep.
+- **Verification:** Local CPU forward and backward passes verified with non-zero gradient norm on model head (`10.23`).
+- **Next Action:** Run on Colab T4 after baseline to compute $\Delta mCA_{\text{AugMix}} = mCA_{\text{AugMix}} - mCA_{\text{base}}$.
 
 ### Step 3: Implement Experiment 3 (Frequency-Aware CNN)
 - Build `src/augmentations/frequency.py` implementing Low-Frequency Component (LFC) and High-Frequency Component (HFC) Fourier decomposition.

@@ -1,0 +1,22 @@
+{
+  "clean_accuracy": 0.9790973871733967,
+  "clean_macro_f1": 0.9706761836018017,
+  "clean_ece": 0.008222349425770444,
+  "total_test_samples": 12630,
+  "mean_corruption_accuracy": 0.8387732911058327,
+  "relative_performance_drop": 0.1433198555178177,
+  "checkpoint_config": {
+    "data_root": "german",
+    "meta_dir": "data/master_v1/metadata",
+    "output_dir": "checkpoints/baseline_resnet18",
+    "seed": 42,
+    "epochs": 25,
+    "batch_size": 128,
+    "lr": 0.05,
+    "weight_decay": 0.0001,
+    "warmup_epochs": 3,
+    "num_workers": 2,
+    "no_pretrained": false,
+    "no_amp": false
+  }
+}

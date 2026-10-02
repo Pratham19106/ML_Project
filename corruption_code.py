@@ -611,7 +611,6 @@ d['Contrast'] = contrast
 d['Elastic'] = elastic_transform
 d['Pixelate'] = pixelate
 d['JPEG'] = jpeg_compression
-
 d['Speckle Noise'] = speckle_noise
 d['Gaussian Blur'] = gaussian_blur
 d['Spatter'] = spatter

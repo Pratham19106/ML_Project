@@ -1,0 +1,24 @@
+{
+  "clean_accuracy": 0.9847189231987332,
+  "clean_macro_f1": 0.9777813532847905,
+  "clean_ece": 0.007118015417199432,
+  "total_test_samples": 12630,
+  "mean_corruption_accuracy": 0.8310150435471101,
+  "relative_performance_drop": 0.15608908900860335,
+  "checkpoint_config": {
+    "data_root": "german",
+    "meta_dir": "data/master_v1/metadata",
+    "output_dir": "checkpoints/augmix_resnet18",
+    "seed": 42,
+    "epochs": 25,
+    "batch_size": 128,
+    "lr": 0.05,
+    "weight_decay": 0.0001,
+    "warmup_epochs": 3,
+    "num_workers": 2,
+    "lambda_jsd": 12.0,
+    "severity": 3,
+    "width": 3,
+    "no_amp": false
+  }
+}

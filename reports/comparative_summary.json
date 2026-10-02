@@ -1,0 +1,60 @@
+{
+  "clean_accuracy": {
+    "baseline": 0.979097,
+    "augmix": 0.984719,
+    "delta": 0.005622
+  },
+  "clean_macro_f1": {
+    "baseline": 0.970676,
+    "augmix": 0.977781,
+    "delta": 0.007105
+  },
+  "clean_ece": {
+    "baseline": 0.008222,
+    "augmix": 0.007118,
+    "delta": -0.001104
+  },
+  "overall_mca": {
+    "baseline": 0.838773,
+    "augmix": 0.831015,
+    "delta": -0.007758
+  },
+  "relative_performance_drop": {
+    "baseline": 0.14332,
+    "augmix": 0.156089,
+    "delta": 0.012769
+  },
+  "modality_mca": {
+    "weather": {
+      "baseline": 0.898263,
+      "augmix": 0.933449,
+      "delta": 0.035186
+    },
+    "blur": {
+      "baseline": 0.948694,
+      "augmix": 0.957375,
+      "delta": 0.008681
+    },
+    "digital": {
+      "baseline": 0.700084,
+      "augmix": 0.691185,
+      "delta": -0.008899
+    },
+    "noise": {
+      "baseline": 0.760772,
+      "augmix": 0.701112,
+      "delta": -0.05966
+    },
+    "non_noise_11": {
+      "baseline": 0.867107,
+      "augmix": 0.878252,
+      "delta": 0.011145
+    },
+    "weather_and_blur_8": {
+      "baseline": 0.929782,
+      "augmix": 0.948403,
+      "delta": 0.018621
+    }
+  },
+  "corruptions_improved_count": "10 of 15"
+}

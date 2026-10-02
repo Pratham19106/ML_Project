@@ -22,8 +22,10 @@ INCLUDE_FILES = [
     Path("AGENT_PROJECT_CONTEXT.md"),
     Path("Structured_Research_Proposal.md"),
     Path("train_baseline.py"),
+    Path("train_augmix.py"),
     Path("evaluate_robustness.py"),
     Path("baseline_experiment_colab.ipynb"),
+    Path("augmix_experiment_colab.ipynb"),
     Path("build_master_dataset.py"),
     Path("corruption_code.py"),
 ]
