@@ -406,21 +406,21 @@ The intended paper story is:
 
 ---
 
-## 14. Known Unknowns and Next Inputs Needed
+## 14. Confirmed Decisions & Resolved Parameters
 
-The following are intentionally unresolved and must not be guessed by agents:
-
-1. Final class-to-concept ontology and its supporting Vienna Convention/German implementation mapping.
-2. Exact GTSRB source/version and the frozen train/validation/test split policy.
-3. Exact canonical input resolution, resize/pad/crop policy, and normalisation values.
-4. Whether ResNet-18 starts from ImageNet-pretrained weights or random initialisation.
-5. Exact data-centric methods, parameters, and class-aware transformation allowlist.
-6. Contents and licensing/provenance of `corruption_code.py` or the external source repository.
-7. Corruption types, severities, deterministic seed policy, and storage approach.
-8. Final standards-derived consistency rules.
-9. Number of seeds, epoch budget, and time budget for Colab T4 experiments.
-
-When any of these are decided, update this document and the corresponding versioned configuration rather than relying on chat history.
+1. **Class-to-Concept Ontology:** Frozen in `data/master_v1/concepts/class_concepts.csv` (43 classes, 5 dimensions: Shape, Colour Profile, Border Type, Symbol Category, Symbol Content).
+2. **Splits & Leakage Policy:** Stratified Group 80/20 train/val split by `ClassId + TrackId` (0 track leakage); frozen in `data/master_v1/metadata/`. Test split (12,630) preserved untouched.
+3. **Preprocessing Contract:** `v1_roi_margin10_letterbox64`: 10% context margin ROI crop $\to$ aspect-preserving bilinear scale $\to$ centered zero-pad to $64 \times 64 \times 3 \to$ ImageNet normalization.
+4. **Model Backbone:** ResNet-18 with ImageNet pretrained initialization (`ResNet18_Weights.DEFAULT`), Kaiming Normal head initialization, and Zero-$\gamma$ residual BN initialization.
+5. **Optimization Protocol:** SGD with Nesterov momentum $\mu=0.9$, No-Bias-Decay rule ($\lambda=10^{-4}$ on 2D weights, $\lambda=0$ on biases/BN), 3-epoch linear warmup + Cosine Annealing decay down to $10^{-5}$, mixed precision (AMP).
+6. **Held-out Corruption Benchmark:** 15 Hendrycks corruptions across 4 categories (Noise, Blur, Weather, Digital) $\times$ 5 severities = 75 evaluation points. Evaluates clean Acc, clean Macro-F1, clean ECE, $mCA$, and $RPD$.
+7. **Empirical Ladder Status:**
+   - Exp 1 (Baseline ResNet-18): Clean Acc $97.91\%$, F1 $97.07\%$, ECE $0.0082$, mCA $83.88\%$, RPD $14.33\%$.
+   - Exp 2 (AugMix ResNet-18): Clean Acc $98.47\%$, F1 $97.78\%$, ECE $0.0071$, mCA $83.10\%$, RPD $15.61\%$.
+   - Exp 3 (Frequency ResNet-18): Clean Acc $97.47\%$, F1 $95.68\%$, ECE $0.0127$, mCA $83.20\%$, RPD $14.64\%$.
+   - Exp 4 (Concept Bottleneck Model): Clean Acc **97.59%**, F1 **96.75%**, ECE **0.0114**, mCA **84.29%** (project record), RPD **13.62%** (lowest degradation).
+   - Exp 5 (Hybrid AugMix + CBM): Clean Acc **97.61%**, F1 **96.53%**, ECE **0.0127**, mCA **81.63%**, RPD **16.37%**. Falsified naive additive complementarity ($H_3$): revealed Representation-Augmentation Interference where AugMix color-destructive transformations (`solarize`, `posterize`) conflict with physical concept consistency (`colour_profile`).
+   - Exp 6 (Frequency-Aware CBM): **NEXT UP**. Combines Fourier spectral regularization (LFC/Dropout) with CBM to target high-frequency noise without color-semantic destruction.
 
 ---
 
@@ -443,12 +443,10 @@ When assisting this project, an AI agent should:
 
 ## 16. Immediate Next Steps
 
-1. Inspect the GTSRB files already available in the workspace and identify their exact layout/version.
-2. Create a preliminary inventory of GTSRB’s 43 classes.
-3. Receive the user’s Vienna Convention notes and draft class-feature mapping.
-4. Convert the draft into a controlled ontology, annotation guide, and `class_concepts.csv` template.
-5. Inspect `corruption_code.py` or the provided repository and formalise the held-out corruption benchmark.
-6. Build the reproducible dataset-preparation and ResNet-18 baseline pipeline.
+1. Implement Experiment 6: Frequency-Aware Concept Bottleneck Model (Spectral Regularization + CBM).
+2. Hypothesize that Fourier-domain filtering avoids the semantic color destruction of AugMix while mitigating high-frequency noise susceptibility.
+3. Prepare unit tests, training pipeline (`train_freq_cbm.py`), and Colab orchestrator for Experiment 6.
+
 
 ---
 

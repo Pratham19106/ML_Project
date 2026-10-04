@@ -460,6 +460,64 @@ This directly motivates **Experiment 3: Concept Bottleneck Models (CBM)**, where
 
 ---
 
+## Section 7: Representation-Centric Track & The Hybrid Interference Phenomenon
+
+### 7.1 Experiment 4: Concept Bottleneck Models (CBM ResNet-18)
+
+#### 1. Motivation & Formal Formulation
+To transition from unconstrained black-box pattern matching to structured semantic reasoning, Experiment 4 implements a Concept Bottleneck Model (CBM) grounded in Koh et al. [2020]. The architecture maps input image $x \in \mathbb{R}^{64 \times 64 \times 3}$ to a 22-dimensional compact semantic bottleneck $\hat{c} = [c_{\text{shape}}, c_{\text{colour}}, c_{\text{border}}, c_{\text{symcat}}] \in \mathbb{R}^{22}$, representing 4 orthogonal physical axes derived from the UNECE Vienna Convention (1968) and German StVO (2017):
+- **Shape (6 classes):** circle, triangle_up, triangle_down, octagon, diamond, rectangle.
+- **Colour Profile (5 classes):** white_red, blue_white, yellow_white, white_black, red_white.
+- **Border Type (4 classes):** red_border, white_border, black_border, none.
+- **Symbol Category (7 classes):** speed_numeral, warning_hazard, mandatory_direction, prohibition_restriction, priority_geometry, deregulation_cancel, none.
+
+To resolve the **Vocabulary Degeneracy** discovered during oracle linear probing (where 4-axis macroscopic features compress 43 classes into 11 unique vectors), we employ a residual bottleneck architecture:
+$$\hat{y} = W_{\text{class}} \hat{c} + W_{\text{aux}} h(x)$$
+where $h(x) \in \mathbb{R}^{512}$ represents the backbone penultimate feature embedding.
+
+#### 2. Empirical Results (Colab T4 Benchmark)
+- **Clean Test Accuracy:** **97.59%**
+- **Clean Macro-F1:** **96.75%**
+- **Expected Calibration Error (ECE):** **0.0114**
+- **Mean Corruption Accuracy ($mCA$, 75 points):** **84.29%** 🏆 *(Project Record)*
+- **Relative Performance Drop ($RPD$):** **13.62%** 🏆 *(Lowest degradation in project)*
+
+#### 3. Core Scientific Finding: The Inductive Semantic Cushioning Effect
+CBM achieved the highest corruption robustness ($84.29\%$) and the lowest degradation from clean accuracy ($RPD = 13.62\%$, compared to Baseline's $14.33\%$ and AugMix's $15.61\%$). By constraining intermediate representations to physical geometric invariants (Shape, Border, Colour), the network is protected from high-frequency pixel corruptions, confirming **Hypothesis $H_2$**.
+
+---
+
+### 7.2 Experiment 5: Hybrid AugMix + CBM & The Representation-Augmentation Interference Phenomenon
+
+#### 1. Formulation: Dual-Level Jensen-Shannon Consistency
+Experiment 5 tested **Hypothesis $H_3$ (Complementarity)** by unifying AugMix data diversity with CBM semantic constraints:
+$$\mathcal{L}_{\text{total}} = \mathcal{L}_{\text{clean}} + \lambda_{\text{jsd}}^{\text{task}} \cdot \text{JSD}(\hat{y}_{\text{clean}}, \hat{y}_{\text{aug1}}, \hat{y}_{\text{aug2}}) + \lambda_{\text{jsd}}^{\text{cpt}} \cdot \frac{1}{4} \sum_{k} \text{JSD}(\hat{c}_{\text{clean}}^{(k)}, \hat{c}_{\text{aug1}}^{(k)}, \hat{c}_{\text{aug2}}^{(k)})$$
+with $\lambda_{\text{jsd}}^{\text{task}} = 12.0$ and $\lambda_{\text{jsd}}^{\text{cpt}} = 4.0$.
+
+#### 2. Empirical Results (Colab T4 Benchmark)
+- **Clean Test Accuracy:** **97.61%**
+- **Clean Macro-F1:** **96.53%**
+- **Expected Calibration Error (ECE):** **0.0127**
+- **Mean Corruption Accuracy ($mCA$, 75 points):** **81.63%**
+- **Relative Performance Drop ($RPD$):** **16.37%**
+
+#### 3. Falsification of Naive Complementarity & Discovery of Representation Interference
+Contrary to naive assumptions that combining two distinct regularizations is purely additive, Hybrid (AugMix + CBM) exhibited significant corruption performance regression ($81.63\%$ vs CBM alone $84.29\%$, $\Delta = -2.66\%$; and vs AugMix alone $83.10\%$, $\Delta = -1.47\%$).
+
+We isolate three underlying physical mechanisms:
+1. **Semantic-Visual Colour Conflict:**
+   AugMix applies color-inverting and quantizing operators (`solarize`, `posterize`, `equalize`). The concept consistency loss simultaneously penalized shifts in predicted physical colour profile (`white_red`, `blue_white`). Forcing the model to assert that a solarized/posterized sign has the exact same clean colour distribution creates direct representation conflict between raw visual evidence and concept supervision.
+2. **High-Frequency Artifact Bottlenecking:**
+   AugMix increases High-Frequency Component (HFC) energy by $3.5\times$ under noise (Phase 1 diagnostics). When passed into a compact 22-dimensional bottleneck, high-frequency artifacts corrupt the semantic concept coordinates.
+3. **Over-Regularization Saturation:**
+   Balancing 5 simultaneous loss terms ($\mathcal{L}_{\text{task}}$, $\lambda_c \mathcal{L}_{\text{cpt}}$, $\lambda_{\text{aux}} \mathcal{L}_{\text{aux}}$, $\lambda_{\text{jsd}}^{\text{task}} \mathcal{L}_{\text{jsd}}^{\text{task}}$, $\lambda_{\text{jsd}}^{\text{cpt}} \mathcal{L}_{\text{jsd}}^{\text{cpt}}$) over-constrains optimization trajectory, causing underfitting under out-of-distribution corruptions.
+
+#### 4. The Path to Experiment 6 (Frequency-Aware CBM)
+This negative interference discovery reveals that **data-centric augmentations that destroy color or inject high-frequency noise are incompatible with physical concept bottlenecks**.
+In contrast, **Fourier-Domain Spectral Filtering (LFC / Spectral Dropout)** attenuates high-frequency noise shortcuts without distorting physical color profiles, identifying Experiment 6 (Frequency-Aware CBM) as the scientifically principled hybrid architecture.
+
+---
+
 ## Section 8: Methodological Grounding & Scholarly References
 
 Every empirical decision in this research pipeline is directly grounded in established literature, international conventions, and published experimental protocols:
