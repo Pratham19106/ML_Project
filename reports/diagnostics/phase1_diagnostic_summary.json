@@ -1,0 +1,57 @@
+{
+  "benchmark_comparison": {
+    "clean_accuracy": {
+      "baseline": 97.91,
+      "augmix": 98.47,
+      "delta": 0.56
+    },
+    "overall_mca": {
+      "baseline": 83.88,
+      "augmix": 83.1,
+      "delta": -0.78
+    },
+    "modality_mca_delta": {
+      "Weather": 3.52,
+      "Blur": 0.87,
+      "Digital": -0.89,
+      "Noise": -5.96
+    }
+  },
+  "critical_findings": {
+    "strongest_gain": "Fog (+6.68% MCA)",
+    "worst_regression": "Impulse Noise (-13.33% MCA)",
+    "noise_modality_regression": "-5.97% MCA across all 4 noise types",
+    "weather_modality_gain": "+3.51% MCA across all 3 weather types",
+    "elastic_distortion_drop": "-4.89% MCA due to non-affine canvas warping"
+  },
+  "ontology_risk_profile": {
+    "total_classes": 43,
+    "symbol_distribution": {
+      "warning_hazard": 14,
+      "mandatory_direction": 8,
+      "speed_numeral": 8,
+      "prohibition_restriction": 4,
+      "deregulation_cancel": 4,
+      "priority_geometry": 4,
+      "none": 1
+    },
+    "shape_distribution": {
+      "circle": 25,
+      "triangle_up": 15,
+      "diamond": 1,
+      "triangle_down": 1,
+      "octagon": 1
+    },
+    "colour_distribution": {
+      "white_red": 28,
+      "blue_white": 8,
+      "white_black": 4,
+      "red_white": 2,
+      "yellow_white": 1
+    },
+    "hfc_dependent_class_count": 30,
+    "lfc_dependent_class_count": 13,
+    "noise_vulnerability_hypothesis": "30 of 43 classes rely primarily on fine internal pictograms/numerals. Additive noise destroys high-frequency edge gradients, explaining why AugMix models regress by -5.97% MCA across noise corruptions."
+  },
+  "phase2_implication": "AugMix alone suffers from high-frequency vulnerability. Experiment 3 (Frequency Augmentation) must incorporate LFC/HFC spectral regularization to close the 5.97% noise gap."
+}

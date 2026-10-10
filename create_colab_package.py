@@ -23,9 +23,13 @@ INCLUDE_FILES = [
     Path("Structured_Research_Proposal.md"),
     Path("train_baseline.py"),
     Path("train_augmix.py"),
+    Path("train_frequency.py"),
+    Path("train_cbm.py"),
     Path("evaluate_robustness.py"),
     Path("baseline_experiment_colab.ipynb"),
     Path("augmix_experiment_colab.ipynb"),
+    Path("frequency_experiment_colab.ipynb"),
+    Path("cbm_experiment_colab.ipynb"),
     Path("build_master_dataset.py"),
     Path("corruption_code.py"),
 ]

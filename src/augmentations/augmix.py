@@ -31,7 +31,7 @@ import torch.nn.functional as F
 from PIL import Image, ImageOps
 import torchvision.transforms.functional as TF
 
-from src.dataset import GTSRBDataset, IMAGENET_MEAN, IMAGENET_STD, letterbox_roi_crop
+from src.dataset import GTSRBDataset, IMAGENET_MEAN, IMAGENET_STD, letterbox_roi_crop, resolve_image_path
 
 
 # ==============================================================================
@@ -213,8 +213,7 @@ class AugMixDataset(GTSRBDataset):
 
     def __getitem__(self, idx: int) -> dict[str, Any]:
         row = self.df.iloc[idx]
-        rel_path = str(row["source_relative_path"]).replace("\\", "/")
-        img_path = self.data_root / rel_path
+        img_path = resolve_image_path(self.data_root, row["source_relative_path"])
 
         with Image.open(img_path) as raw_img:
             img = raw_img.convert("RGB")

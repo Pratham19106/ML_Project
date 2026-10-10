@@ -1,0 +1,6 @@
+condition,low_frequency_energy_pct,mid_frequency_energy_pct,high_frequency_energy_pct
+Clean,99.7,0.23,0.07
+"AugMix (width=3, sev=3)",99.81,0.16,0.04
+Gaussian Noise (sev=3),99.75,0.17,0.07
+Shot Noise (sev=3),99.67,0.23,0.09
+Impulse Noise (sev=3),99.49,0.26,0.25

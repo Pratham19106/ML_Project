@@ -29,6 +29,7 @@ from tqdm import tqdm
 from src.corruptions import CORRUPTIONS_REGISTRY
 from src.dataset import IMAGENET_MEAN, IMAGENET_STD, letterbox_roi_crop
 from src.models.baseline_cnn import BaselineResNet18
+from src.models.cbm import ConceptBottleneckModel
 
 
 def compute_ece(probs: np.ndarray, targets: np.ndarray, n_bins: int = 15) -> float:
@@ -82,7 +83,8 @@ def evaluate_clean(
             targets.append(int(row["class_id"]))
 
         batch_tensor = torch.stack(tensors).to(device)
-        logits = model(batch_tensor)
+        outputs = model(batch_tensor)
+        logits = outputs["logits"] if isinstance(outputs, dict) else outputs
         probs = F.softmax(logits, dim=1).cpu().numpy()
 
         preds = np.argmax(probs, axis=1)
@@ -147,7 +149,8 @@ def evaluate_corruptions(
                     tensors.append(t)
 
                 batch_t = torch.stack(tensors).to(device)
-                logits = model(batch_t)
+                outputs = model(batch_t)
+                logits = outputs["logits"] if isinstance(outputs, dict) else outputs
                 preds = torch.argmax(logits, dim=1).cpu().numpy()
                 all_preds.extend(preds)
 
@@ -190,8 +193,19 @@ def main():
 
     # Load Model
     checkpoint_data = torch.load(args.checkpoint, map_location=device)
-    model = BaselineResNet18(num_classes=43, pretrained=False)
-    model.load_state_dict(checkpoint_data["model_state_dict"])
+    state_dict = checkpoint_data["model_state_dict"]
+    is_cbm = any("head_shape" in k for k in state_dict.keys())
+
+    if is_cbm:
+        print("Detected Model Architecture: ConceptBottleneckModel (CBM)")
+        config = checkpoint_data.get("config", {})
+        bottleneck_mode = config.get("bottleneck_mode", "residual")
+        model = ConceptBottleneckModel(num_classes=43, pretrained=False, bottleneck_mode=bottleneck_mode)
+    else:
+        print("Detected Model Architecture: BaselineResNet18")
+        model = BaselineResNet18(num_classes=43, pretrained=False)
+
+    model.load_state_dict(state_dict)
     model.to(device)
     model.eval()
 

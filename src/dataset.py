@@ -64,6 +64,39 @@ def letterbox_roi_crop(
     return canvas
 
 
+def resolve_image_path(data_root: Path, rel_path: str) -> Path:
+    """Robustly resolves an image path handling case sensitivity (Train vs train) and directory nesting."""
+    rel_p = str(rel_path).replace("\\", "/")
+    direct = data_root / rel_p
+    if direct.is_file():
+        return direct
+
+    parts = rel_p.split("/")
+    if len(parts) > 1:
+        top = parts[0]
+        rest = "/".join(parts[1:])
+        alt_top = top.lower() if top[0].isupper() else top.capitalize()
+        case_alt = data_root / alt_top / rest
+        if case_alt.is_file():
+            return case_alt
+
+    parent_direct = data_root.parent / rel_p
+    if parent_direct.is_file():
+        return parent_direct
+
+    if len(parts) > 1:
+        alt_top = top.lower() if top[0].isupper() else top.capitalize()
+        parent_case_alt = data_root.parent / alt_top / rest
+        if parent_case_alt.is_file():
+            return parent_case_alt
+
+    sub_direct = data_root / "german" / rel_p
+    if sub_direct.is_file():
+        return sub_direct
+
+    return direct
+
+
 class GTSRBDataset(Dataset):
     """PyTorch Dataset loading from frozen master_v1 manifests."""
 
@@ -94,9 +127,8 @@ class GTSRBDataset(Dataset):
     def __getitem__(self, idx: int) -> dict[str, Any]:
         row = self.df.iloc[idx]
 
-        # Resolve image file
-        rel_path = str(row["source_relative_path"]).replace("\\", "/")
-        img_path = self.data_root / rel_path
+        # Resolve image file with case/nesting fallback
+        img_path = resolve_image_path(self.data_root, row["source_relative_path"])
 
         with Image.open(img_path) as raw_img:
             img = raw_img.convert("RGB")
