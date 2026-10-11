@@ -11,6 +11,8 @@ INCLUDE_DIRS = [
     Path("german"),
     Path("data/master_v1"),
     Path("src"),
+    Path("notebooks"),
+    Path("scripts"),
 ]
 
 INCLUDE_FILES = [
@@ -25,11 +27,9 @@ INCLUDE_FILES = [
     Path("train_augmix.py"),
     Path("train_frequency.py"),
     Path("train_cbm.py"),
+    Path("train_freq_cbm.py"),
+    Path("train_hybrid.py"),
     Path("evaluate_robustness.py"),
-    Path("baseline_experiment_colab.ipynb"),
-    Path("augmix_experiment_colab.ipynb"),
-    Path("frequency_experiment_colab.ipynb"),
-    Path("cbm_experiment_colab.ipynb"),
     Path("build_master_dataset.py"),
     Path("corruption_code.py"),
 ]

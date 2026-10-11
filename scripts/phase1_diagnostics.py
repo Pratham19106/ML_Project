@@ -37,10 +37,21 @@ CORRUPTION_CATEGORIES = {
 
 
 def run_diagnostics(project_root: Path) -> dict:
-    base_matrix_path = project_root / "baseline" / "robustness_matrix.csv"
-    aug_matrix_path = project_root / "augmix_1" / "robustness_matrix.csv"
-    base_eval_path = project_root / "baseline" / "evaluation_summary.json"
-    aug_eval_path = project_root / "augmix_1" / "evaluation_summary.json"
+    base_matrix_path = project_root / "reports" / "baseline_resnet18" / "robustness_matrix.csv"
+    if not base_matrix_path.exists():
+        base_matrix_path = project_root / "baseline" / "robustness_matrix.csv"
+
+    aug_matrix_path = project_root / "reports" / "augmix_resnet18" / "robustness_matrix.csv"
+    if not aug_matrix_path.exists():
+        aug_matrix_path = project_root / "augmix_1" / "robustness_matrix.csv"
+
+    base_eval_path = project_root / "reports" / "baseline_resnet18" / "evaluation_summary.json"
+    if not base_eval_path.exists():
+        base_eval_path = project_root / "baseline" / "evaluation_summary.json"
+
+    aug_eval_path = project_root / "reports" / "augmix_resnet18" / "evaluation_summary.json"
+    if not aug_eval_path.exists():
+        aug_eval_path = project_root / "augmix_1" / "evaluation_summary.json"
     ontology_path = project_root / "data" / "master_v1" / "concepts" / "class_concepts.csv"
     output_dir = project_root / "reports" / "diagnostics"
     output_dir.mkdir(parents=True, exist_ok=True)

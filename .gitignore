@@ -10,8 +10,9 @@ data/master_v1/images/
 archive/
 belgium/
 german/
-
-
+.cursorrules
+.agents/
+*graphify*
 # Virtual environments
 venv/
 .env/
