@@ -15,7 +15,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 from typing import Any, Dict, List, Tuple
 
 import numpy as np
@@ -33,8 +39,6 @@ from src.dataset import IMAGENET_MEAN, IMAGENET_STD, letterbox_roi_crop
 from src.models.baseline_cnn import BaselineResNet18
 from src.models.cbm import ConceptBottleneckModel, get_concept_lookup_tensors
 from src.models.concept_encoder import encode_all_classes, load_class_concepts
-
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
 def load_model(checkpoint_path: str, device: torch.device) -> Tuple[nn.Module, bool]:

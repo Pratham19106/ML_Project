@@ -22,8 +22,12 @@ from __future__ import annotations
 import argparse
 import copy
 import json
+import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 import cv2
 import numpy as np
@@ -40,8 +44,6 @@ from src.corruptions import CORRUPTIONS_REGISTRY
 from src.dataset import IMAGENET_MEAN, IMAGENET_STD, letterbox_roi_crop
 from src.models.baseline_cnn import BaselineResNet18
 from src.models.cbm import ConceptBottleneckModel
-
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
 def load_model(checkpoint_path: str, device: torch.device) -> Tuple[nn.Module, bool]:
