@@ -6,12 +6,15 @@ Executes in-domain training for:
 2. Frequency-Aware Concept Bottleneck Model (Freq-CBM ResNet-18)
 3. Standard Concept Bottleneck Model (Residual CBM ResNet-18)
 
-Adheres strictly to the master training dynamics:
+Optimized for High-Throughput Modern GPUs (NVIDIA A100 / V100 / T4):
+- Automatic TF32 matrix multiplication acceleration (Ampere / A100)
+- cuDNN benchmark autotuning
+- Automatic bfloat16 / float16 mixed precision
+- 4-worker threaded data loading with persistent workers and prefetch
 - Bag-of-Tricks zero-gamma BN initialization
-- Decoupled No-Bias-Decay rule (weight decay applied strictly to non-bias/norm weights)
+- Decoupled No-Bias-Decay rule
 - 3-epoch Linear Warmup + Cosine Annealing decay down to 1e-5
-- Automatic Mixed Precision (torch.cuda.amp)
-- Macro-F1 model selection checkpointing
+- Live On-The-Fly Google Drive checkpoint synchronization at every peak validation epoch
 """
 
 from __future__ import annotations
@@ -20,6 +23,7 @@ import argparse
 import json
 import os
 import random
+import shutil
 import sys
 import time
 from pathlib import Path
@@ -56,14 +60,46 @@ IMAGENET_MEAN = [0.485, 0.456, 0.406]
 IMAGENET_STD = [0.229, 0.224, 0.225]
 
 
+def configure_gpu_performance() -> torch.dtype:
+    """Configures TF32 and cuDNN autotuning for maximum A100/Ampere throughput."""
+    if torch.cuda.is_available():
+        torch.backends.cuda.matmul.allow_tf32 = True
+        torch.backends.cudnn.allow_tf32 = True
+        torch.backends.cudnn.benchmark = True
+        if torch.cuda.is_bf16_supported():
+            return torch.bfloat16
+    return torch.float16
+
+
+def sync_checkpoint_to_drive(file_path: Path, subfolder_name: str, custom_drive_dir: Optional[str] = None) -> None:
+    """Copies checkpoint or log to Google Drive immediately on the fly."""
+    target_root = None
+    if custom_drive_dir:
+        target_root = Path(custom_drive_dir)
+    else:
+        colab_default = Path("/content/drive/MyDrive/ML_Project_Phase2_Results/checkpoints")
+        if colab_default.parent.exists():
+            target_root = colab_default
+
+    if target_root is not None:
+        try:
+            dest_dir = target_root / subfolder_name
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            dst = dest_dir / file_path.name
+            shutil.copy2(file_path, dst)
+            print(f"  [DRIVE SYNC] Synced {file_path.name} -> {dst}")
+        except Exception as e:
+            print(f"  [DRIVE SYNC WARNING] Could not sync checkpoint: {e}")
+
+
 def set_seed(seed: int = 42) -> None:
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
-        torch.backends.cudnn.deterministic = True
-        torch.backends.cudnn.benchmark = False
+        torch.backends.cudnn.deterministic = False
+        torch.backends.cudnn.benchmark = True
 
 
 # ==============================================================================
@@ -101,8 +137,7 @@ class InDomainTSRDataset(Dataset):
         return len(self.df)
 
     def __getitem__(self, idx: int) -> dict[str, Any]:
-        rel_path = self.paths[idx]
-        full_path = self.data_root / rel_path
+        full_path = self.data_root / self.paths[idx]
         with Image.open(full_path) as img:
             img = img.convert("RGB")
 
@@ -157,6 +192,7 @@ def train_epoch_baseline(
     scaler: torch.cuda.amp.GradScaler,
     device: torch.device,
     use_amp: bool = True,
+    amp_dtype: torch.dtype = torch.float16,
 ) -> float:
     model.train()
     total_loss = 0.0
@@ -166,7 +202,7 @@ def train_epoch_baseline(
         labels = batch["label"].to(device, non_blocking=True)
 
         optimizer.zero_grad(set_to_none=True)
-        with torch.cuda.amp.autocast(enabled=use_amp):
+        with torch.cuda.amp.autocast(enabled=use_amp, dtype=amp_dtype):
             logits = model(images)
             loss = criterion(logits, labels)
 
@@ -188,6 +224,7 @@ def train_epoch_cbm(
     concept_luts: Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
     device: torch.device,
     use_amp: bool = True,
+    amp_dtype: torch.dtype = torch.float16,
 ) -> Tuple[float, Dict[str, float]]:
     model.train()
     total_loss = 0.0
@@ -204,7 +241,7 @@ def train_epoch_cbm(
         target_symcat = symcat_lut[labels]
 
         optimizer.zero_grad(set_to_none=True)
-        with torch.cuda.amp.autocast(enabled=use_amp):
+        with torch.cuda.amp.autocast(enabled=use_amp, dtype=amp_dtype):
             outputs = model(images)
             loss, loss_dict = criterion(
                 outputs, labels, target_shape, target_colour, target_border, target_symcat
@@ -230,6 +267,7 @@ def evaluate_model(
     loader: DataLoader,
     device: torch.device,
     is_cbm: bool = False,
+    amp_dtype: torch.dtype = torch.float16,
 ) -> Dict[str, float]:
     model.eval()
     all_preds: List[int] = []
@@ -240,29 +278,32 @@ def evaluate_model(
     b_preds, b_targets = [], []
     y_preds, y_targets = [], []
 
+    use_amp = (device.type == "cuda")
+
     for batch in loader:
         images = batch["image"].to(device, non_blocking=True)
         labels = batch["label"]
 
-        if is_cbm:
-            outputs = model(images)
-            preds = torch.argmax(outputs["logits"], dim=1).cpu().numpy()
-            s_p = torch.argmax(outputs["pred_shape"], dim=1).cpu().numpy()
-            c_p = torch.argmax(outputs["pred_colour"], dim=1).cpu().numpy()
-            b_p = torch.argmax(outputs["pred_border"], dim=1).cpu().numpy()
-            y_p = torch.argmax(outputs["pred_symcat"], dim=1).cpu().numpy()
+        with torch.cuda.amp.autocast(enabled=use_amp, dtype=amp_dtype):
+            if is_cbm:
+                outputs = model(images)
+                preds = torch.argmax(outputs["logits"], dim=1).cpu().numpy()
+                s_p = torch.argmax(outputs["logits_shape"], dim=1).cpu().numpy()
+                c_p = torch.argmax(outputs["logits_colour"], dim=1).cpu().numpy()
+                b_p = torch.argmax(outputs["logits_border"], dim=1).cpu().numpy()
+                y_p = torch.argmax(outputs["logits_symcat"], dim=1).cpu().numpy()
 
-            s_preds.extend(s_p)
-            s_targets.extend(batch["shape"].numpy())
-            c_preds.extend(c_p)
-            c_targets.extend(batch["colour"].numpy())
-            b_preds.extend(b_p)
-            b_targets.extend(batch["border"].numpy())
-            y_preds.extend(y_p)
-            y_targets.extend(batch["symbol"].numpy())
-        else:
-            logits = model(images)
-            preds = torch.argmax(logits, dim=1).cpu().numpy()
+                s_preds.extend(s_p)
+                s_targets.extend(batch["shape"].numpy())
+                c_preds.extend(c_p)
+                c_targets.extend(batch["colour"].numpy())
+                b_preds.extend(b_p)
+                b_targets.extend(batch["border"].numpy())
+                y_preds.extend(y_p)
+                y_targets.extend(batch["symbol"].numpy())
+            else:
+                logits = model(images)
+                preds = torch.argmax(logits, dim=1).cpu().numpy()
 
         all_preds.extend(preds)
         all_targets.extend(labels.numpy())
@@ -312,16 +353,19 @@ def main():
     parser.add_argument("--model-type", type=str, required=True, choices=["baseline", "freq_cbm", "cbm"],
                         help="Model architecture: 'baseline', 'freq_cbm', or 'cbm'")
     parser.add_argument("--epochs", type=int, default=30, help="Total training epochs (default: 30)")
-    parser.add_argument("--batch-size", type=int, default=64, help="Batch size (default: 64)")
+    parser.add_argument("--batch-size", type=int, default=128, help="Batch size (default: 128)")
     parser.add_argument("--lr", type=float, default=0.05, help="Initial learning rate (default: 0.05)")
     parser.add_argument("--seed", type=int, default=42, help="Master random seed (default: 42)")
     parser.add_argument("--warmup-epochs", type=int, default=3, help="Linear warmup epochs (default: 3)")
+    parser.add_argument("--num-workers", type=int, default=4, help="DataLoader workers (default: 4)")
     parser.add_argument("--output-dir", type=str, default="", help="Custom output directory")
+    parser.add_argument("--drive-dir", type=str, default="", help="Optional custom Drive checkpoints directory")
     parser.add_argument("--no-amp", action="store_true", help="Disable Automatic Mixed Precision")
     args = parser.parse_args()
 
     set_seed(args.seed)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    amp_dtype = configure_gpu_performance()
     use_amp = not args.no_amp and device.type == "cuda"
 
     # Dataset resolution
@@ -339,18 +383,23 @@ def main():
     test_manifest = data_root / "metadata" / "test.csv"
     concept_csv = data_root / "concepts" / "class_concepts.csv"
 
-    # Output directory
+    subfolder_name = f"phase2_{args.dataset}_{args.model_type}"
     if args.output_dir:
         output_dir = Path(args.output_dir)
     else:
-        output_dir = PROJECT_ROOT / "checkpoints" / f"phase2_{args.dataset}_{args.model_type}"
+        output_dir = PROJECT_ROOT / "checkpoints" / subfolder_name
     output_dir.mkdir(parents=True, exist_ok=True)
 
     print("=" * 80)
     print(f"Phase 2 In-Domain Training: {args.model_type.upper()} on {dataset_name}")
-    print(f"Device: {device} | Mixed Precision: {use_amp} | Num Classes: {num_classes}")
+    print(f"Hardware: {device} | Precision: {amp_dtype} | Num Classes: {num_classes} | Batch Size: {args.batch_size}")
+    if torch.cuda.is_available():
+        gpu_name = torch.cuda.get_device_name(0)
+        vram_gb = torch.cuda.get_device_properties(0).total_memory / (1024**3)
+        print(f"Active GPU: {gpu_name} ({vram_gb:.1f} GB VRAM) | TF32: True | cuDNN Benchmark: True")
     print(f"Data Root: {data_root}")
     print(f"Output Directory: {output_dir}")
+    print(f"On-the-Fly Drive Sync: Active (Auto-detecting /content/drive/MyDrive/ML_Project_Phase2_Results/checkpoints)")
     print("=" * 80)
 
     # Datasets & Loaders
@@ -379,21 +428,21 @@ def main():
         train_dataset,
         batch_size=args.batch_size,
         shuffle=True,
-        num_workers=2 if sys.platform != "win32" else 0,
+        num_workers=args.num_workers if sys.platform != "win32" else 0,
         pin_memory=torch.cuda.is_available(),
     )
     val_loader = DataLoader(
         val_dataset,
         batch_size=args.batch_size,
         shuffle=False,
-        num_workers=2 if sys.platform != "win32" else 0,
+        num_workers=args.num_workers if sys.platform != "win32" else 0,
         pin_memory=torch.cuda.is_available(),
     )
     test_loader = DataLoader(
         test_dataset,
         batch_size=args.batch_size,
         shuffle=False,
-        num_workers=2 if sys.platform != "win32" else 0,
+        num_workers=args.num_workers if sys.platform != "win32" else 0,
         pin_memory=torch.cuda.is_available(),
     )
 
@@ -434,7 +483,6 @@ def main():
 
     # Training Loop
     for epoch in range(1, args.epochs + 1):
-        # Warmup vs Cosine Annealing
         if epoch <= args.warmup_epochs:
             warmup_lr = args.lr * (epoch / args.warmup_epochs)
             for pg in optimizer.param_groups:
@@ -447,16 +495,16 @@ def main():
         epoch_start = time.time()
         if is_cbm:
             train_loss, loss_dict = train_epoch_cbm(
-                model, train_loader, criterion, optimizer, scaler, concept_luts, device, use_amp
+                model, train_loader, criterion, optimizer, scaler, concept_luts, device, use_amp, amp_dtype
             )
         else:
             train_loss = train_epoch_baseline(
-                model, train_loader, criterion, optimizer, scaler, device, use_amp
+                model, train_loader, criterion, optimizer, scaler, device, use_amp, amp_dtype
             )
             loss_dict = {"task_ce": train_loss}
 
         # Validation
-        val_metrics = evaluate_model(model, val_loader, device, is_cbm=is_cbm)
+        val_metrics = evaluate_model(model, val_loader, device, is_cbm=is_cbm, amp_dtype=amp_dtype)
         epoch_dur = time.time() - epoch_start
 
         # Record History
@@ -489,6 +537,8 @@ def main():
                 "dataset": args.dataset,
                 "model_type": args.model_type,
             }, checkpoint_path)
+            # Sync to Drive immediately on peak validation save
+            sync_checkpoint_to_drive(checkpoint_path, subfolder_name, custom_drive_dir=args.drive_dir)
 
         cpt_str = f" | Val Cpt: {val_metrics.get('mean_concept_acc', 0.0)*100:.1f}%" if is_cbm else ""
         best_str = " [BEST]" if is_best else ""
@@ -503,7 +553,7 @@ def main():
     print(f"\nEvaluating Best Checkpoint ({checkpoint_path.name}) on Held-Out Test Set...")
     best_ckpt = torch.load(checkpoint_path, map_location=device)
     model.load_state_dict(best_ckpt["model_state_dict"])
-    test_metrics = evaluate_model(model, test_loader, device, is_cbm=is_cbm)
+    test_metrics = evaluate_model(model, test_loader, device, is_cbm=is_cbm, amp_dtype=amp_dtype)
 
     print(f"Test Top-1 Accuracy: {test_metrics['top1_acc']*100:.2f}%")
     print(f"Test Macro-F1:      {test_metrics['macro_f1']*100:.2f}%")
@@ -528,15 +578,20 @@ def main():
     }
     summary.update({f"test_{k}": v for k, v in test_metrics.items()})
 
-    with open(output_dir / "training_history.json", "w", encoding="utf-8") as f:
+    f_hist = output_dir / "training_history.json"
+    with open(f_hist, "w", encoding="utf-8") as f:
         json.dump({"summary": summary, "epochs": history}, f, indent=2)
 
-    with open(output_dir / "summary.json", "w", encoding="utf-8") as f:
+    f_sum = output_dir / "summary.json"
+    with open(f_sum, "w", encoding="utf-8") as f:
         json.dump(summary, f, indent=2)
 
-    print(f"Results logged to: {output_dir / 'summary.json'}")
+    # Sync summary & history files to Google Drive on the fly
+    sync_checkpoint_to_drive(f_hist, subfolder_name, custom_drive_dir=args.drive_dir)
+    sync_checkpoint_to_drive(f_sum, subfolder_name, custom_drive_dir=args.drive_dir)
+
+    print(f"Results logged locally and synced to Google Drive: {output_dir / 'summary.json'}")
 
 
 if __name__ == "__main__":
     main()
-

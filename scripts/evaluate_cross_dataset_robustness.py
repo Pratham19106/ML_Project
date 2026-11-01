@@ -7,10 +7,13 @@ Evaluates:
 - Phase 2: In-domain trained models (Baseline & Freq-CBM) on Belgium & China corruptions
            (75 conditions under Static vs Adapted BN)
 
-Generates:
-- 15x5 robustness matrices (.csv)
-- Comprehensive metric summaries (.json)
-- Comparative synthesis report (.md)
+Optimized for High-Throughput Modern GPUs (NVIDIA A100 / V100 / T4):
+- Automatic TF32 matrix multiplication acceleration (Ampere / A100)
+- cuDNN benchmark autotuning
+- Automatic bfloat16 / float16 mixed precision
+- Multi-worker threaded data loading with persistent workers and prefetch
+- Parallelized linear probe solver (n_jobs=-1)
+- Live On-The-Fly Google Drive synchronization after every model/dataset run
 """
 
 from __future__ import annotations
@@ -19,6 +22,7 @@ import argparse
 import copy
 import json
 import os
+import shutil
 import sys
 import time
 from pathlib import Path
@@ -53,6 +57,39 @@ from src.models.concept_encoder import (
 
 IMAGENET_MEAN = [0.485, 0.456, 0.406]
 IMAGENET_STD = [0.229, 0.224, 0.225]
+
+
+def configure_gpu_performance() -> torch.dtype:
+    """Configures TF32 and cuDNN autotuning for maximum A100/Ampere throughput."""
+    if torch.cuda.is_available():
+        torch.backends.cuda.matmul.allow_tf32 = True
+        torch.backends.cudnn.allow_tf32 = True
+        torch.backends.cudnn.benchmark = True
+        if torch.cuda.is_bf16_supported():
+            return torch.bfloat16
+    return torch.float16
+
+
+def sync_reports_to_drive(file_paths: List[Path], custom_drive_dir: Optional[str] = None) -> None:
+    """Copies generated JSON/CSV report files to Google Drive immediately on the fly."""
+    target_dir = None
+    if custom_drive_dir:
+        target_dir = Path(custom_drive_dir)
+    else:
+        colab_default = Path("/content/drive/MyDrive/ML_Project_Phase2_Results/reports")
+        if colab_default.parent.exists():
+            target_dir = colab_default
+
+    if target_dir is not None:
+        try:
+            target_dir.mkdir(parents=True, exist_ok=True)
+            for p in file_paths:
+                if p.exists():
+                    dst = target_dir / p.name
+                    shutil.copy2(p, dst)
+                    print(f"  [DRIVE SYNC] Synced {p.name} -> {dst}")
+        except Exception as e:
+            print(f"  [DRIVE SYNC WARNING] Could not sync to drive: {e}")
 
 
 def set_bn_mode(model: nn.Module, mode: str) -> None:
@@ -127,51 +164,35 @@ def extract_features(
     loader: DataLoader,
     device: torch.device,
     is_cbm: bool = False,
+    amp_dtype: torch.dtype = torch.float16,
 ) -> Dict[str, np.ndarray]:
     features_list = []
     labels_list = []
     s_preds, c_preds, b_preds, y_preds = [], [], [], []
     s_tgts, c_tgts, b_tgts, y_tgts = [], [], [], []
 
+    use_amp = (device.type == "cuda")
+
     for batch in loader:
         images = batch["image"].to(device, non_blocking=True)
-        bs = images.size(0)
 
-        if is_cbm:
-            # ResNet-18 feature extraction in CBM
-            x = model.conv1(images)
-            x = model.bn1(x)
-            x = model.relu(x)
-            x = model.maxpool(x)
-            x = model.layer1(x)
-            x = model.layer2(x)
-            x = model.layer3(x)
-            x = model.layer4(x)
-            feat = model.avgpool(x).view(bs, -1)
+        with torch.cuda.amp.autocast(enabled=use_amp, dtype=amp_dtype):
+            if is_cbm:
+                outputs = model(images)
+                feat = outputs["features"]
+                s_preds.extend(torch.argmax(outputs["logits_shape"], dim=1).cpu().numpy())
+                c_preds.extend(torch.argmax(outputs["logits_colour"], dim=1).cpu().numpy())
+                b_preds.extend(torch.argmax(outputs["logits_border"], dim=1).cpu().numpy())
+                y_preds.extend(torch.argmax(outputs["logits_symcat"], dim=1).cpu().numpy())
 
-            # Concept predictions
-            outputs = model(images)
-            s_preds.extend(torch.argmax(outputs["pred_shape"], dim=1).cpu().numpy())
-            c_preds.extend(torch.argmax(outputs["pred_colour"], dim=1).cpu().numpy())
-            b_preds.extend(torch.argmax(outputs["pred_border"], dim=1).cpu().numpy())
-            y_preds.extend(torch.argmax(outputs["pred_symcat"], dim=1).cpu().numpy())
+                s_tgts.extend(batch["shape"].numpy())
+                c_tgts.extend(batch["colour"].numpy())
+                b_tgts.extend(batch["border"].numpy())
+                y_tgts.extend(batch["symbol"].numpy())
+            else:
+                feat = model.extract_features(images)
 
-            s_tgts.extend(batch["shape"].numpy())
-            c_tgts.extend(batch["colour"].numpy())
-            b_tgts.extend(batch["border"].numpy())
-            y_tgts.extend(batch["symbol"].numpy())
-        else:
-            x = model.backbone.conv1(images)
-            x = model.backbone.bn1(x)
-            x = model.backbone.relu(x)
-            x = model.backbone.maxpool(x)
-            x = model.backbone.layer1(x)
-            x = model.backbone.layer2(x)
-            x = model.backbone.layer3(x)
-            x = model.backbone.layer4(x)
-            feat = model.backbone.avgpool(x).view(bs, -1)
-
-        features_list.append(feat.cpu().numpy())
+        features_list.append(feat.float().cpu().numpy())
         labels_list.append(batch["label"].numpy())
 
     out = {
@@ -197,7 +218,10 @@ def run_phase1_robustness(
     model_name: str,
     device: torch.device,
     reports_dir: Path,
-    batch_size: int = 64,
+    batch_size: int = 128,
+    num_workers: int = 4,
+    amp_dtype: torch.dtype = torch.float16,
+    drive_dir: Optional[str] = None,
 ) -> Dict[str, Any]:
     print(f"\n>>> Running Phase 1 Robustness: German {model_name} on {dataset_key.upper()}...")
     is_cbm = ("cbm" in model_name.lower())
@@ -221,17 +245,30 @@ def run_phase1_robustness(
 
     # 1. Fit Linear Probe on Clean Target Training Features
     clean_train_ds = CorruptedTSRDataset(data_root, train_manifest, corruption_fn=None)
-    clean_train_loader = DataLoader(clean_train_ds, batch_size=batch_size, shuffle=False, num_workers=2 if sys.platform != "win32" else 0)
+    clean_train_loader = DataLoader(
+        clean_train_ds,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers if sys.platform != "win32" else 0,
+        pin_memory=torch.cuda.is_available(),
+    )
     set_bn_mode(model, "static")
-    train_feat = extract_features(model, clean_train_loader, device, is_cbm=is_cbm)
+    train_feat = extract_features(model, clean_train_loader, device, is_cbm=is_cbm, amp_dtype=amp_dtype)
 
-    clf = LogisticRegression(max_iter=500, C=1.0, solver="lbfgs", multi_class="multinomial", random_state=42)
+    # Parallel L-BFGS linear classifier
+    clf = LogisticRegression(max_iter=500, C=1.0, solver="lbfgs", random_state=42, n_jobs=-1)
     clf.fit(train_feat["features"], train_feat["labels"])
 
     # 2. Evaluate Clean Test
     clean_test_ds = CorruptedTSRDataset(data_root, test_manifest, corruption_fn=None)
-    clean_test_loader = DataLoader(clean_test_ds, batch_size=batch_size, shuffle=False, num_workers=2 if sys.platform != "win32" else 0)
-    clean_test_feat = extract_features(model, clean_test_loader, device, is_cbm=is_cbm)
+    clean_test_loader = DataLoader(
+        clean_test_ds,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers if sys.platform != "win32" else 0,
+        pin_memory=torch.cuda.is_available(),
+    )
+    clean_test_feat = extract_features(model, clean_test_loader, device, is_cbm=is_cbm, amp_dtype=amp_dtype)
     clean_acc = float(accuracy_score(clean_test_feat["labels"], clf.predict(clean_test_feat["features"])))
 
     # 3. Sweep All 75 Corruptions under Static BN and Adapted BN
@@ -249,14 +286,19 @@ def run_phase1_robustness(
 
         for c_name, c_fn in CORRUPTIONS_REGISTRY.items():
             for sev in range(1, 6):
-                # Fresh model copy for test-time adaptation to prevent contamination
                 eval_model = copy.deepcopy(model)
                 set_bn_mode(eval_model, bn_mode)
 
                 corrupt_ds = CorruptedTSRDataset(data_root, test_manifest, corruption_fn=c_fn, severity=sev)
-                corrupt_loader = DataLoader(corrupt_ds, batch_size=batch_size, shuffle=False, num_workers=2 if sys.platform != "win32" else 0)
+                corrupt_loader = DataLoader(
+                    corrupt_ds,
+                    batch_size=batch_size,
+                    shuffle=False,
+                    num_workers=num_workers if sys.platform != "win32" else 0,
+                    pin_memory=torch.cuda.is_available(),
+                )
 
-                feat_out = extract_features(eval_model, corrupt_loader, device, is_cbm=is_cbm)
+                feat_out = extract_features(eval_model, corrupt_loader, device, is_cbm=is_cbm, amp_dtype=amp_dtype)
                 y_pred = clf.predict(feat_out["features"])
                 acc = float(accuracy_score(feat_out["labels"], y_pred))
                 matrix[c_name].append(acc)
@@ -273,13 +315,16 @@ def run_phase1_robustness(
     with open(out_json, "w", encoding="utf-8") as f:
         json.dump(results, f, indent=2)
 
-    # Save Static Matrix CSV
+    f_static = reports_dir / f"phase1_matrix_{dataset_key}_{model_name}_static.csv"
     df_static = pd.DataFrame(results["static_matrix"], index=[f"sev_{s}" for s in range(1, 6)]).T
-    df_static.to_csv(reports_dir / f"phase1_matrix_{dataset_key}_{model_name}_static.csv")
+    df_static.to_csv(f_static)
 
-    # Save Adapt Matrix CSV
+    f_adapt = reports_dir / f"phase1_matrix_{dataset_key}_{model_name}_adapt.csv"
     df_adapt = pd.DataFrame(results["adapt_matrix"], index=[f"sev_{s}" for s in range(1, 6)]).T
-    df_adapt.to_csv(reports_dir / f"phase1_matrix_{dataset_key}_{model_name}_adapt.csv")
+    df_adapt.to_csv(f_adapt)
+
+    # Live sync to Google Drive on the fly
+    sync_reports_to_drive([out_json, f_static, f_adapt], custom_drive_dir=drive_dir)
 
     return results
 
@@ -294,7 +339,10 @@ def run_phase2_robustness(
     ckpt_path: Path,
     device: torch.device,
     reports_dir: Path,
-    batch_size: int = 64,
+    batch_size: int = 128,
+    num_workers: int = 4,
+    amp_dtype: torch.dtype = torch.float16,
+    drive_dir: Optional[str] = None,
 ) -> Dict[str, Any]:
     print(f"\n>>> Running Phase 2 In-Domain Robustness: {model_type.upper()} on {dataset_key.upper()}...")
     is_cbm = (model_type in ["freq_cbm", "cbm"])
@@ -315,19 +363,28 @@ def run_phase2_robustness(
 
     # 1. Evaluate Clean In-Domain Test
     clean_ds = CorruptedTSRDataset(data_root, test_manifest, corruption_fn=None)
-    clean_loader = DataLoader(clean_ds, batch_size=batch_size, shuffle=False, num_workers=2 if sys.platform != "win32" else 0)
+    clean_loader = DataLoader(
+        clean_ds,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers if sys.platform != "win32" else 0,
+        pin_memory=torch.cuda.is_available(),
+    )
 
     set_bn_mode(model, "static")
     model.eval()
     clean_preds, clean_targets = [], []
+    use_amp = (device.type == "cuda")
+
     with torch.no_grad():
         for batch in clean_loader:
             images = batch["image"].to(device, non_blocking=True)
-            if is_cbm:
-                out = model(images)
-                preds = torch.argmax(out["logits"], dim=1).cpu().numpy()
-            else:
-                preds = torch.argmax(model(images), dim=1).cpu().numpy()
+            with torch.cuda.amp.autocast(enabled=use_amp, dtype=amp_dtype):
+                if is_cbm:
+                    out = model(images)
+                    preds = torch.argmax(out["logits"], dim=1).cpu().numpy()
+                else:
+                    preds = torch.argmax(model(images), dim=1).cpu().numpy()
             clean_preds.extend(preds)
             clean_targets.extend(batch["label"].numpy())
 
@@ -354,17 +411,24 @@ def run_phase2_robustness(
                 set_bn_mode(eval_model, bn_mode)
 
                 corrupt_ds = CorruptedTSRDataset(data_root, test_manifest, corruption_fn=c_fn, severity=sev)
-                corrupt_loader = DataLoader(corrupt_ds, batch_size=batch_size, shuffle=False, num_workers=2 if sys.platform != "win32" else 0)
+                corrupt_loader = DataLoader(
+                    corrupt_ds,
+                    batch_size=batch_size,
+                    shuffle=False,
+                    num_workers=num_workers if sys.platform != "win32" else 0,
+                    pin_memory=torch.cuda.is_available(),
+                )
 
                 c_preds, c_tgts = [], []
                 with torch.no_grad():
                     for batch in corrupt_loader:
                         images = batch["image"].to(device, non_blocking=True)
-                        if is_cbm:
-                            out = eval_model(images)
-                            p = torch.argmax(out["logits"], dim=1).cpu().numpy()
-                        else:
-                            p = torch.argmax(eval_model(images), dim=1).cpu().numpy()
+                        with torch.cuda.amp.autocast(enabled=use_amp, dtype=amp_dtype):
+                            if is_cbm:
+                                out = eval_model(images)
+                                p = torch.argmax(out["logits"], dim=1).cpu().numpy()
+                            else:
+                                p = torch.argmax(eval_model(images), dim=1).cpu().numpy()
                         c_preds.extend(p)
                         c_tgts.extend(batch["label"].numpy())
 
@@ -383,11 +447,16 @@ def run_phase2_robustness(
     with open(out_json, "w", encoding="utf-8") as f:
         json.dump(results, f, indent=2)
 
+    f_static = reports_dir / f"phase2_matrix_{dataset_key}_{model_type}_static.csv"
     df_static = pd.DataFrame(results["static_matrix"], index=[f"sev_{s}" for s in range(1, 6)]).T
-    df_static.to_csv(reports_dir / f"phase2_matrix_{dataset_key}_{model_type}_static.csv")
+    df_static.to_csv(f_static)
 
+    f_adapt = reports_dir / f"phase2_matrix_{dataset_key}_{model_type}_adapt.csv"
     df_adapt = pd.DataFrame(results["adapt_matrix"], index=[f"sev_{s}" for s in range(1, 6)]).T
-    df_adapt.to_csv(reports_dir / f"phase2_matrix_{dataset_key}_{model_type}_adapt.csv")
+    df_adapt.to_csv(f_adapt)
+
+    # Live sync to Google Drive on the fly
+    sync_reports_to_drive([out_json, f_static, f_adapt], custom_drive_dir=drive_dir)
 
     return results
 
@@ -402,18 +471,28 @@ def main():
                         help="Benchmark phase to execute: '1', '2', or 'all'")
     parser.add_argument("--dataset", type=str, default="all", choices=["belgium", "china", "all"],
                         help="Target dataset: 'belgium', 'china', or 'all'")
-    parser.add_argument("--batch-size", type=int, default=64, help="Batch size for corruption passes")
+    parser.add_argument("--batch-size", type=int, default=128, help="Batch size for corruption passes")
+    parser.add_argument("--num-workers", type=int, default=4, help="DataLoader workers (default: 4)")
     parser.add_argument("--output-dir", type=str, default="reports/cross_dataset_robustness",
                         help="Directory to save evaluation reports and matrices")
+    parser.add_argument("--drive-dir", type=str, default="", help="Optional custom Google Drive directory to sync on the fly")
     args = parser.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    amp_dtype = configure_gpu_performance()
+
     out_dir = PROJECT_ROOT / args.output_dir
     out_dir.mkdir(parents=True, exist_ok=True)
 
     print("=" * 80)
-    print(f"Cross-Dataset Robustness Evaluation Suite | Phase: {args.phase} | Device: {device}")
+    print(f"Cross-Dataset Robustness Evaluation Suite | Phase: {args.phase}")
+    print(f"Hardware: {device} | Precision: {amp_dtype} | Batch Size: {args.batch_size} | Workers: {args.num_workers}")
+    if torch.cuda.is_available():
+        gpu_name = torch.cuda.get_device_name(0)
+        vram_gb = torch.cuda.get_device_properties(0).total_memory / (1024**3)
+        print(f"Active GPU: {gpu_name} ({vram_gb:.1f} GB VRAM) | TF32: True | cuDNN Benchmark: True")
     print(f"Reports Output Directory: {out_dir}")
+    print(f"On-the-Fly Drive Sync: Active (Auto-detecting /content/drive/MyDrive/ML_Project_Phase2_Results/reports)")
     print("=" * 80)
 
     datasets = ["belgium", "china"] if args.dataset == "all" else [args.dataset]
@@ -428,6 +507,9 @@ def main():
                     device=device,
                     reports_dir=out_dir,
                     batch_size=args.batch_size,
+                    num_workers=args.num_workers,
+                    amp_dtype=amp_dtype,
+                    drive_dir=args.drive_dir,
                 )
 
     # --- Phase 2 Execution ---
@@ -443,15 +525,17 @@ def main():
                         device=device,
                         reports_dir=out_dir,
                         batch_size=args.batch_size,
+                        num_workers=args.num_workers,
+                        amp_dtype=amp_dtype,
+                        drive_dir=args.drive_dir,
                     )
                 else:
                     print(f"Warning: Phase 2 checkpoint not found at {ckpt}. Skipping Phase 2 for {d}_{m}.")
 
     print("\n" + "=" * 80)
-    print(f"Robustness Benchmarking Complete! All matrices and JSON reports saved to: {out_dir}")
+    print(f"Robustness Benchmarking Complete! All matrices and JSON reports saved locally and to Google Drive!")
     print("=" * 80)
 
 
 if __name__ == "__main__":
     main()
-

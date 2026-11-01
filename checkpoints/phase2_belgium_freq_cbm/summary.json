@@ -1,0 +1,20 @@
+{
+  "dataset": "belgium",
+  "model_type": "freq_cbm",
+  "num_classes": 62,
+  "epochs": 30,
+  "batch_size": 128,
+  "learning_rate": 0.05,
+  "best_epoch": 17,
+  "val_peak_macro_f1": 0.7739174281072633,
+  "test_top1_acc": 0.925808997632202,
+  "test_macro_f1": 0.7009019102498909,
+  "total_train_time_sec": 72.57432961463928,
+  "checkpoint_file": "/content/ML_Project/checkpoints/phase2_belgium_freq_cbm/best_freq_cbm_belgium.pt",
+  "test_shape_acc": 0.9936858721389108,
+  "test_colour_acc": 0.9972375690607734,
+  "test_border_acc": 0.994869771112865,
+  "test_symbol_acc": 0.9834254143646409,
+  "test_mean_concept_acc": 0.9923046566692976,
+  "test_exact_4_concept_match": 0.978689818468824
+}

@@ -1,0 +1,14 @@
+{
+  "dataset": "china",
+  "model_type": "baseline",
+  "num_classes": 58,
+  "epochs": 30,
+  "batch_size": 128,
+  "learning_rate": 0.05,
+  "best_epoch": 5,
+  "val_peak_macro_f1": 0.9772630285831866,
+  "test_top1_acc": 0.9317953861584755,
+  "test_macro_f1": 0.8856919775917836,
+  "total_train_time_sec": 46.06441307067871,
+  "checkpoint_file": "/content/ML_Project/checkpoints/phase2_china_baseline/best_baseline_china.pt"
+}

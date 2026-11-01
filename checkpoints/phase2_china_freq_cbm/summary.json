@@ -1,0 +1,20 @@
+{
+  "dataset": "china",
+  "model_type": "freq_cbm",
+  "num_classes": 58,
+  "epochs": 30,
+  "batch_size": 128,
+  "learning_rate": 0.05,
+  "best_epoch": 15,
+  "val_peak_macro_f1": 0.9667130936696153,
+  "test_top1_acc": 0.9488465396188566,
+  "test_macro_f1": 0.9200459719016276,
+  "total_train_time_sec": 66.71701502799988,
+  "checkpoint_file": "/content/ML_Project/checkpoints/phase2_china_freq_cbm/best_freq_cbm_china.pt",
+  "test_shape_acc": 0.9889669007021064,
+  "test_colour_acc": 0.9919759277833501,
+  "test_border_acc": 0.9849548645937813,
+  "test_symbol_acc": 0.9859578736208626,
+  "test_mean_concept_acc": 0.9879638916750251,
+  "test_exact_4_concept_match": 0.9769307923771314
+}
